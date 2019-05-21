@@ -1,0 +1,208 @@
+---
+title: "Project"
+author: "Amnah Mahmood"
+date: "5/18/2019"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(broom)
+library(lubridate)
+#knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+csv_file <- "data.csv"
+newtable <- read_csv(csv_file)
+names(newtable) <- str_replace_all(names(newtable), c(" " = "_", "," = ""))
+newtable
+```
+
+```{r}
+euro = "\u20AC"
+newtable$Wage = gsub(euro, '', newtable$Wage)
+newtable <- newtable %>% 
+  filter(Wage != 0)
+newtable$Wage = gsub("K", '', newtable$Wage)
+newtable <- newtable %>% mutate(Wage = as.double(newtable$Wage))
+```
+```{r}
+newtable%>%
+  filter(Wage > 200) %>%
+  group_by(Wage)%>%
+  summarize(num_players = n()) %>%
+  ggplot(mapping = aes (x = num_players, y = Wage)) + geom_point()
+```
+```{r}
+newtable$group = ifelse(newtable$Age < 20, "0-19", 
+                        ifelse(newtable$Age < 25, "20-24",
+                               ifelse(newtable$Age < 30, "25-29",
+                                      ifelse(newtable$Age < 35, "30-34",
+                                             ifelse(newtable$Age < 40, "35-39", "40-100")))))
+
+newtable%>%
+  group_by(Age)%>%
+  ggplot(mapping = aes (x = Age, fill = group)) + geom_histogram() + scale_fill_manual(values = c("0-19" = "#74b2ad",
+                                 "20-24" = "#aaa4d6",
+                                 "25-29" = "#ef9151",
+                                 "30-34" = "#ef91d6",
+                                 "35-39" = "#efc115",
+                                 "40-100" = "red"))
+
+```
+
+```{r}
+newtable %>%
+  ggplot(mapping = aes(x=factor(Age), y=Wage)) +
+    geom_point() +
+    labs(title="Age and Wage",
+         x = "Age",
+         y = "Wage")
+```
+related to age but not a linear trend so may be another factor involved
+```{r}
+#lm_obj <- lm(Wage ~ Age + Potential, data = newtable)
+newtable$International_Reputation[which(is.nan(newtable$International_Reputation))] = NA
+newtable$International_Reputation[which(newtable$International_Reputation==Inf)] = NA
+
+#International_Reputation <- as.integer(International_Reputation)
+lm_obj <- lm(Wage ~ Age * International_Reputation, data = newtable)
+plot_ex2 <- broom::tidy(lm_obj)
+plot_ex2
+newtable
+```
+I'm assuming it to be international reputation
+Reject null
+There is no relationship between Age/International reputation and wage
+```{r}
+newtable <- lm_obj %>%
+  augment() %>%
+  ggplot(aes(x = factor(Age), y = .resid)) +
+    geom_point() +
+    labs(title="Residuals Over Age",
+         x = "Age",
+         y = "residuals")
+newtable
+```
+High residuals prediction not accurate
+Residuals spread out 
+Age too big or too small residuals small so prediction correct otherwise no
+Difference between predicted and true value
+between -100 and 100
+```{r}
+newtable <- lm_obj %>%
+  augment() %>%
+  ggplot(aes(x = factor(.fitted), y = .resid)) +
+    geom_point() +
+    labs(title="Residuals Over Fitted",
+         x = "fitted",
+         y = "residuals")
+newtable
+temp
+```
+mean values around 0
+symmetric about the mean
+not symmetric here
+so another factor at play
+fitted values vs residuals
+```{r}
+temp$Wage[which(is.nan(temp$Wage))] = NA
+temp$Wage[which(temp$Wage==Inf)] = NA
+temp$Wage <-as.numeric(temp$Wage)
+temp <- temp[!is.na(temp$Wage), ]
+
+temp$Potential[which(is.nan(temp$Potential))] = NA
+temp$Potential[which(temp$Potential==Inf)] = NA
+temp <- temp[!is.na(temp$Potential), ]
+
+temp$Position[which(is.nan(temp$Position))] = NA
+temp$Position[which(temp$Position==Inf)] = NA
+temp <- temp[!is.na(temp$Position), ]
+
+temp$Age[which(is.nan(temp$Age))] = NA
+temp$Age[which(temp$Age==Inf)] = NA
+temp <- temp[!is.na(temp$Age), ]
+
+temp$International_Reputation[which(is.nan(temp$International_Reputation))] = NA
+temp$International_Reputation[which(temp$International_Reputation==Inf)] = NA
+temp <- temp[!is.na(temp$International_Reputation), ]
+
+outcome_df <- temp %>%
+  mutate(Result = ifelse(Wage > 5, "Top", "Bottom")) %>%
+  select(Potential, Result)
+outcome_df
+
+outcome_df1 <- temp %>%
+  mutate(Result = ifelse(Wage > 5, "Top", "Bottom")) %>%
+  mutate(Position = as.numeric(factor(Position)) -1) %>%
+  select(Potential, Position, Age, International_Reputation, Result)
+outcome_df1
+
+in_validation <- sample(nrow(outcome_df1), as.integer(nrow(outcome_df1)*70/100))
+validation_set <- outcome_df1[-in_validation,]
+training_set <- outcome_df1[in_validation,]
+
+in_validation1 <- sample(nrow(outcome_df), as.integer(nrow(outcome_df)*70/100))
+validation_set1 <- outcome_df[-in_validation1,]
+training_set1 <- outcome_df[in_validation1,]
+```
+```{r}
+library(caret)
+rf_fit <- train(Result~.,
+                data = training_set,
+                na.action = na.pass,
+                method="rf",
+                trControl=trainControl(method="none"))
+rf_fit
+
+rf_fit1 <- train(Result~.,
+                data = training_set1,
+                 na.action = na.pass,
+                method="rf",
+                trControl=trainControl(method="none"))
+rf_fit1
+```
+```{r}
+test_predictions <- predict(rf_fit, newdata = validation_set)
+table(pred=test_predictions,
+      observed=validation_set$Result)
+```
+```{r}
+test_predictions1 <- predict(rf_fit1, newdata = validation_set1)
+table(pred=test_predictions1,
+      observed=validation_set1$Result)
+```
+Let's take bottom to be positive and top to be negative
+
+```{r}
+Precision <- 3339/(3339 + 620)
+Recall <-3339/(3339 + 206)
+
+Precision
+Recall
+
+
+```
+gives a higher number for both precision and recall so better model
+
+```{r}
+Precision1 <- 2937/(2937 + 862)
+Recall1 <- 2937/(2937 + 552)
+Precision1
+Recall1
+
+```
+```{r}
+f1score <- 2*(Precision * Recall)/(Precision + Recall)
+f1score
+
+f1score1 <- 2*(Precision1 * Recall1)/(Precision1 + Recall1)
+f1score1
+
+```
+first model better than second
+
+how many am I predicting to be positive in the total positive observed data, recall
+how many of the total positive things cna you find out
+
+how many am I predicting to be accurate and how many are actually positive
