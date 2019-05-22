@@ -1,15 +1,13 @@
 ---
-title: "Project"
+title: "Final Project"
 author: "Amnah Mahmood"
 date: "5/18/2019"
 output: html_document
 ---
-
 ```{r setup, include=FALSE}
 library(tidyverse)
 library(broom)
 library(lubridate)
-#knitr::opts_chunk$set(echo = TRUE)
 ```
 ```{r}
 csv_file <- "data.csv"
@@ -17,6 +15,7 @@ newtable <- read_csv(csv_file)
 names(newtable) <- str_replace_all(names(newtable), c(" " = "_", "," = ""))
 newtable
 ```
+I am using a dataset on Football analytics. data.csv includes lastest edition FIFA 2019 player attributes like Age, Nationality, Overall, Potential, Club, Value, Wage, Preferred Foot, International Reputation, Weak Foot, Skill Moves, Work Rate and Position among others.
 
 ```{r}
 euro = "\u20AC"
@@ -24,71 +23,61 @@ newtable$Wage = gsub(euro, '', newtable$Wage)
 newtable <- newtable %>% 
   filter(Wage != 0)
 newtable$Wage = gsub("K", '', newtable$Wage)
-newtable <- newtable %>% mutate(Wage = as.double(newtable$Wage))
+newtable <- newtable %>% 
+  mutate(Wage = as.double(newtable$Wage))
 ```
+In this piece of code I am dropping the "euro" sign and character K using the gsub function in order to perform calculations on the Wage attribute. I am also filtering out Wage to get rid of values that are 0. Having 0's can make it difficult if not impossible to achieve the correct output values. Lastly I am mutating the Wage column and changing its data type from character to double to make performing calculations easier.
+
 ```{r}
-newtable%>%
-  filter(Wage > 200) %>%
-  group_by(Wage)%>%
-  summarize(num_players = n()) %>%
-  ggplot(mapping = aes (x = num_players, y = Wage)) + geom_point()
-```
-```{r}
-newtable$group = ifelse(newtable$Age < 20, "0-19", 
-                        ifelse(newtable$Age < 25, "20-24",
-                               ifelse(newtable$Age < 30, "25-29",
-                                      ifelse(newtable$Age < 35, "30-34",
-                                             ifelse(newtable$Age < 40, "35-39", "40-100")))))
+newtable$group = ifelse(newtable$Age < 20, "10-20", 
+                        ifelse(newtable$Age < 26, "20-25",
+                               ifelse(newtable$Age < 31, "25-30",
+                                      ifelse(newtable$Age < 36, "30-35",
+                                             ifelse(newtable$Age < 41, "35-40", "40-50")))))
 
 newtable%>%
   group_by(Age)%>%
-  ggplot(mapping = aes (x = Age, fill = group)) + geom_histogram() + scale_fill_manual(values = c("0-19" = "#74b2ad",
-                                 "20-24" = "#aaa4d6",
-                                 "25-29" = "#ef9151",
-                                 "30-34" = "#ef91d6",
-                                 "35-39" = "#efc115",
-                                 "40-100" = "red"))
-
+  ggplot(mapping = aes (x = Age, fill = group)) + geom_histogram() + scale_fill_manual(values = c("10-20" = "#74b2ad",
+                                 "20-25" = "#aaa4d6",
+                                 "25-30" = "#ef9151",
+                                 "30-35" = "#ef91d6",
+                                 "35-40" = "#efc115",
+                                 "40-50" = "red"))
 ```
+Here I am making a histogram of attribute Age vs number of players within a certain age group using geom_histogram(). To the right of the plot is a key displaying how grouping is done. We have six different age groups: 10-20, 20-25, 25-30, 30-35, 35-40, and 40-50. The key to the right also shows which color correspond to which age group. Coloring is done with help of ifelse statements and using the fill field inside of ggplot.
 
 ```{r}
 newtable %>%
   ggplot(mapping = aes(x=factor(Age), y=Wage)) +
     geom_point() +
-    labs(title="Age and Wage",
+    labs(title="Age vs Wage",
          x = "Age",
          y = "Wage")
 ```
-related to age but not a linear trend so may be another factor involved
+Here I am making a simple scatter plot of Age vs Wage using geom_point() with x-axis = Age and y-axis = Wage. We observe a relationship between the two attributes. The wage shows an increasing trend up to a certain age and then starts decreasing which is what we would expect intuitively. 
 ```{r}
-#lm_obj <- lm(Wage ~ Age + Potential, data = newtable)
 newtable$International_Reputation[which(is.nan(newtable$International_Reputation))] = NA
 newtable$International_Reputation[which(newtable$International_Reputation==Inf)] = NA
 
-#International_Reputation <- as.integer(International_Reputation)
 lm_obj <- lm(Wage ~ Age * International_Reputation, data = newtable)
 plot_ex2 <- broom::tidy(lm_obj)
 plot_ex2
-newtable
 ```
-I'm assuming it to be international reputation
-Reject null
-There is no relationship between Age/International reputation and wage
+In this piece of code I am getting rid of all the rows in International_Reputation that have missing values and then modeling a linear regression on Wage based on Age and International_Reputation. I am assuming that in addition to Age, Wage is also depending on International_Reputation. I am performing linear regression using the lm function and passing in Wage, Age and International_Ranking and then using broom::tidy to tidy the model and display it in the form of a table. 
+
+We observe in our results that the p.value is significantly smaller than 0.05 so we reject our null hypothesis that there is no relationship between Wage in terms of Age and International Reputation. 
 ```{r}
 newtable <- lm_obj %>%
   augment() %>%
   ggplot(aes(x = factor(Age), y = .resid)) +
     geom_point() +
-    labs(title="Residuals Over Age",
+    labs(title="Residuals vs Age",
          x = "Age",
          y = "residuals")
 newtable
 ```
-High residuals prediction not accurate
-Residuals spread out 
-Age too big or too small residuals small so prediction correct otherwise no
-Difference between predicted and true value
-between -100 and 100
+From lecture notes we know that for our inferences to be valid, we need residuals to be independent and identically distributed. The residuals are not independently distributed in the plot above which may be due to non-linearity, which simply means that the underlying relationship between Wage and Age is not linear. 
+
 ```{r}
 newtable <- lm_obj %>%
   augment() %>%
@@ -100,11 +89,7 @@ newtable <- lm_obj %>%
 newtable
 temp
 ```
-mean values around 0
-symmetric about the mean
-not symmetric here
-so another factor at play
-fitted values vs residuals
+In the plot of Fitted values vs Residuals we check for possible non-linearity. We can use exploratory visual analysis to check for this for now by plotting residuals as a function of the fitted values. Since the values in the plot above are not observed to be symmetric about the mean 0 we conclude from the plot of Fitted values vs Residuals that another factor must be at play and our prediction for non-linearity was correct.
 ```{r}
 temp$Wage[which(is.nan(temp$Wage))] = NA
 temp$Wage[which(temp$Wage==Inf)] = NA
@@ -146,6 +131,7 @@ in_validation1 <- sample(nrow(outcome_df), as.integer(nrow(outcome_df)*70/100))
 validation_set1 <- outcome_df[-in_validation1,]
 training_set1 <- outcome_df[in_validation1,]
 ```
+In the piece of code above my goal is to do an experiment to address and predict Wage modeled on a single factor called Potential and Wage modeled on multiple factors such as Potential, Position, Age and International_Reputation. To predict the outcome I will compare Wage based this single factor and then the multiple factors stated previously. For this dataset I noticed that there were a significant number of rows carrying 0 so I am performing the experiment on a smaller dataset. First thing I do is get rid of all the missing values in all the column I will be using in my experiment and then splitting Wage into Top and Bottom bracket. I am using 70% of the data to train and 30% to test. At this point I am ready to train and test my experiment. 
 ```{r}
 library(caret)
 rf_fit <- train(Result~.,
@@ -162,17 +148,20 @@ rf_fit1 <- train(Result~.,
                 trControl=trainControl(method="none"))
 rf_fit1
 ```
+Here I train my two models. 
+First Wage modeled on Potential and then Wage modeled on more predictors. 
 ```{r}
 test_predictions <- predict(rf_fit, newdata = validation_set)
 table(pred=test_predictions,
       observed=validation_set$Result)
 ```
+Displayed above is my resulting table for my first model. 
 ```{r}
 test_predictions1 <- predict(rf_fit1, newdata = validation_set1)
 table(pred=test_predictions1,
       observed=validation_set1$Result)
 ```
-Let's take bottom to be positive and top to be negative
+Displayed above is my resulting table for my second model. 
 
 ```{r}
 Precision <- 3339/(3339 + 620)
@@ -180,29 +169,21 @@ Recall <-3339/(3339 + 206)
 
 Precision
 Recall
-
-
 ```
-gives a higher number for both precision and recall so better model
+In the piece of code above I calculate Precision and Recall for the first model. 
 
 ```{r}
 Precision1 <- 2937/(2937 + 862)
 Recall1 <- 2937/(2937 + 552)
 Precision1
 Recall1
-
 ```
+In the piece of code above I calculate Precision and Recall for the second model. 
 ```{r}
 f1score <- 2*(Precision * Recall)/(Precision + Recall)
 f1score
 
 f1score1 <- 2*(Precision1 * Recall1)/(Precision1 + Recall1)
 f1score1
-
 ```
-first model better than second
-
-how many am I predicting to be positive in the total positive observed data, recall
-how many of the total positive things cna you find out
-
-how many am I predicting to be accurate and how many are actually positive
+Here I calculate the f1-score for my first and second models and observe that the f1-score for the first model is higher than the second. Therfore, I conclude that my first model, Wage based on Potential is better than second my second model Wage based on Potential, Position, Age and International_Ranking.
